@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm White background */
+    --background: 36 38% 97%;
+    --foreground: 180 22% 14%;
+
+    /* Cards: Light Grey (warm-tinted) */
+    --card: 33 20% 95%;
+    --card-foreground: 180 22% 14%;
+
+    /* Primary: Deep Teal */
+    --primary: 182 52% 18%;
+    --primary-foreground: 36 40% 97%;
+
+    /* Secondary: Warm Gold */
+    --secondary: 38 58% 58%;
+    --secondary-foreground: 182 40% 14%;
+
+    /* Accent: Soft Sage */
+    --accent: 100 18% 68%;
+    --accent-foreground: 182 40% 14%;
+    --sage: 100 18% 68%;
+    --sage-foreground: 182 40% 14%;
+
+    /* CTA: Emerald */
+    --cta: 158 58% 28%;
+    --cta-foreground: 40 40% 98%;
+
+    --muted: 33 20% 92%;
+    --muted-foreground: 180 12% 38%;
+
+    --destructive: 4 66% 47%;
+    --destructive-foreground: 40 40% 98%;
+
+    --border: 33 18% 87%;
+    --input: 33 18% 87%;
+    --ring: 182 52% 28%;
+
+    --radius: 1rem;
+
+    --font-heading: 'Manrope Variable', ui-sans-serif, sans-serif;
+    --font-body: 'Inter Variable', ui-sans-serif, sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+
+  ::selection {
+    @apply bg-cta/20;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-5 focus:py-3 focus:text-primary-foreground focus:shadow-soft;
+  }
+}

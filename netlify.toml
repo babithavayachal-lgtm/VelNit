@@ -1,0 +1,37 @@
+# Netlify deployment configuration for VelNit Life (Phase 1)
+# Docs: https://docs.netlify.com/frameworks/next-js/overview/
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# The official Next.js Runtime plugin handles SSR, ISR, Server Actions,
+# next/image optimization, and Route Handlers on Netlify automatically.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Required environment variables (set these in the Netlify UI under
+# Site configuration > Environment variables - see docs/ENVIRONMENT_VARIABLES.md):
+#   NEXT_PUBLIC_SITE_URL
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+#   SUPABASE_SECRET_KEY (optional, server-only)
+#   RESEND_API_KEY (optional)
+#   RESEND_FROM_EMAIL (optional)
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[redirects]]
+  from = "/home"
+  to = "/"
+  status = 301
