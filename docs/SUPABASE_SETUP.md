@@ -57,3 +57,72 @@ supabase gen types typescript --project-id <your-project-ref> > types/database.t
 
 The rest of the codebase imports the `Database` type (not individual table
 shapes), so regenerating this file is a drop-in replacement.
+
+
+## 6. Content Operating System (Phase B) - schema migration
+
+Run the second migration in the SQL Editor:
+
+```
+supabase/migrations/0002_content_os.sql
+```
+
+This creates the founder-only Content Operating System workspace:
+
+- `founders` - the allowlist gating everything below. A Supabase Auth
+  account alone is never enough to reach `/studio` - see step 8.
+- `content_ideas`, `content_briefs`, `content_items`, `content_reviews`,
+  `knowledge_references`, `publication_jobs` - the idea -> brief -> draft
+  -> review pipeline described in the README.
+- A `content_status` enum (`idea`, `brief_ready`, `generating`, `draft`,
+  `needs_revision`, `approved`, `scheduled`, `published`, `archived`).
+- Row Level Security restricted entirely to founders - there is no public
+  read or write access to any table in this migration, unlike the Phase 1
+  lead-capture tables.
+
+Also idempotent (safe to re-run).
+
+## 7. (Optional) Seed the pilot content idea and brief
+
+```
+supabase/seed/content_os_seed.sql
+```
+
+Seeds a handful of `knowledge_references` drawn from the Brain documents
+(`brain/*.md`) and the Phase B pilot idea/brief - "Loneliness after the
+children leave home" - so `/studio` has something to generate drafts from
+immediately instead of starting completely empty. Safe to re-run.
+
+## 8. Provision a founder
+
+The Content OS workspace at `/studio` is founder-only. Getting in takes
+two steps, both one-time:
+
+1. **Create a Supabase Auth account.** In the Supabase dashboard, go to
+   **Authentication → Users → Add user** and create an account with the
+   founder's email and a password (or invite by email). This is a normal
+   Supabase Auth user - it does *not* grant Studio access by itself.
+2. **Add that user to the `founders` allowlist.** In the SQL Editor, run:
+
+   ```sql
+   insert into public.founders (id, email, full_name)
+   values (
+     (select id from auth.users where email = 'founder@velnit.life'),
+     'founder@velnit.life',
+     'Founder Name'
+   );
+   ```
+
+   Repeat step 2 for each additional founder. Removing Studio access for
+   someone is the reverse: `delete from public.founders where email = '...'`.
+
+Once both steps are done, sign in at `/studio/login` with that email and
+password.
+
+## 9. AI generation (optional)
+
+`/studio` works fully without this - founders can still create ideas,
+briefs, and manually written or edited drafts. Only the "Generate 4
+drafts" button needs it. See
+[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for
+`AI_PROVIDER` / `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`.

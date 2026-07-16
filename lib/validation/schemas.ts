@@ -37,3 +37,57 @@ export const contactSchema = z.object({
 });
 
 export type ContactInput = z.infer<typeof contactSchema>;
+
+// ------------------------------------------------------------
+// Studio (Phase B - Content Operating System) schemas
+// ------------------------------------------------------------
+
+export const loginSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address."),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
+export const contentIdeaSchema = z.object({
+  topic: z.string().trim().min(3, "Give the idea a topic.").max(200),
+  audience: z.string().trim().min(3, "Describe who this is for.").max(300),
+  notes: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+
+export type ContentIdeaInput = z.infer<typeof contentIdeaSchema>;
+
+export const contentBriefSchema = z.object({
+  ideaId: z.string().uuid(),
+  topic: z.string().trim().min(3).max(200),
+  audience: z.string().trim().min(3).max(300),
+  primaryEmotion: z.string().trim().min(2, "Name the primary emotion.").max(200),
+  desiredOutcome: z.string().trim().min(3, "Describe the desired outcome.").max(500),
+  talkStage: z.string().trim().min(2, "Name the TALK stage.").max(200),
+  vrifPillars: z
+    .array(z.string().trim().min(1))
+    .min(1, "Select at least one VRIF pillar."),
+  practicalAction: z.string().trim().min(3, "Describe the practical action.").max(300),
+  callToAction: z.string().trim().min(3, "Describe the call to action.").max(300),
+  knowledgeReferenceIds: z.array(z.string().uuid()).default([]),
+  prohibitedClaims: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+export type ContentBriefInput = z.infer<typeof contentBriefSchema>;
+
+export const contentReviewSchema = z.object({
+  contentItemId: z.string().uuid(),
+  decision: z.enum(["approved", "needs_revision"]),
+  score: z.coerce.number().min(1).max(10).optional(),
+  notes: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+
+export type ContentReviewInput = z.infer<typeof contentReviewSchema>;
+
+export const contentItemEditSchema = z.object({
+  contentItemId: z.string().uuid(),
+  title: z.string().trim().min(3, "Title is required.").max(300),
+  body: z.string().trim().min(10, "Body is required."),
+});
+
+export type ContentItemEditInput = z.infer<typeof contentItemEditSchema>;
