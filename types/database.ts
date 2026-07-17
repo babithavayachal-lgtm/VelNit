@@ -366,6 +366,47 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["publication_jobs"]["Insert"]>;
         Relationships: [];
       };
+
+      content_item_revisions: {
+        Row: {
+          id: string;
+          created_at: string;
+          content_item_id: string;
+          version: number;
+          title: string;
+          body: string;
+          status: string;
+          talk_stage: string | null;
+          vrif_pillars: string[];
+          knowledge_reference_ids: string[];
+          prompt_version: string | null;
+          review_score: number | null;
+          review_notes: string | null;
+          generation_error: string | null;
+          revision_summary: string | null;
+          changed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          content_item_id: string;
+          version: number;
+          title: string;
+          body: string;
+          status: string;
+          talk_stage?: string | null;
+          vrif_pillars?: string[];
+          knowledge_reference_ids?: string[];
+          prompt_version?: string | null;
+          review_score?: number | null;
+          review_notes?: string | null;
+          generation_error?: string | null;
+          revision_summary?: string | null;
+          changed_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["content_item_revisions"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -397,3 +438,4 @@ export type ContentBrief = Database["public"]["Tables"]["content_briefs"]["Row"]
 export type ContentItem = Database["public"]["Tables"]["content_items"]["Row"];
 export type ContentReview = Database["public"]["Tables"]["content_reviews"]["Row"];
 export type PublicationJob = Database["public"]["Tables"]["publication_jobs"]["Row"];
+export type ContentItemRevision = Database["public"]["Tables"]["content_item_revisions"]["Row"];

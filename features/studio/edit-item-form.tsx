@@ -26,9 +26,9 @@ export function EditItemForm({
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
 
-  const { register, handleSubmit } = useForm<ContentItemEditInput>({
+  const { register, handleSubmit, reset } = useForm<ContentItemEditInput>({
     resolver: zodResolver(contentItemEditSchema),
-    defaultValues: { contentItemId, title, body },
+    defaultValues: { contentItemId, title, body, revisionSummary: "" },
   });
 
   async function onSubmit(data: ContentItemEditInput) {
@@ -39,6 +39,7 @@ export function EditItemForm({
     setSubmitting(false);
     if (result.success) {
       setSaved(true);
+      reset({ ...data, revisionSummary: "" });
       router.refresh();
     } else {
       setError(result.error);
@@ -56,11 +57,24 @@ export function EditItemForm({
         <Label htmlFor="edit-body">Body</Label>
         <Textarea id="edit-body" className="mt-2 min-h-64" {...register("body")} />
       </div>
+      <div>
+        <Label htmlFor="revision-summary">What changed and why (optional)</Label>
+        <Textarea
+          id="revision-summary"
+          className="mt-2"
+          placeholder="e.g. Removed an invented anecdote, softened an absolute claim, replaced the demanding question with a gentler prompt."
+          {...register("revisionSummary")}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Saved alongside the current version in its version history, so future readers can see
+          exactly what changed between versions.
+        </p>
+      </div>
       <Button type="submit" variant="outline" disabled={submitting}>
         {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-        Save manual edit
+        Save as new version
       </Button>
-      {saved && <p className="text-sm text-primary">Saved.</p>}
+      {saved && <p className="text-sm text-primary">Saved - the previous version is preserved in the version history below.</p>}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

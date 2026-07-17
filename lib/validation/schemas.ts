@@ -88,6 +88,7 @@ export const contentItemEditSchema = z.object({
   contentItemId: z.string().uuid(),
   title: z.string().trim().min(3, "Title is required.").max(300),
   body: z.string().trim().min(10, "Body is required."),
+  revisionSummary: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
 export type ContentItemEditInput = z.infer<typeof contentItemEditSchema>;

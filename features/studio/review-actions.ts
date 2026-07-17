@@ -79,7 +79,7 @@ export async function submitReview(input: ContentReviewInput): Promise<ActionRes
 }
 
 export async function editContentItem(input: ContentItemEditInput): Promise<ActionResult> {
-  await requireFounder();
+  const founder = await requireFounder();
 
   const parsed = contentItemEditSchema.safeParse(input);
   if (!parsed.success) {
@@ -90,6 +90,8 @@ export async function editContentItem(input: ContentItemEditInput): Promise<Acti
     id: parsed.data.contentItemId,
     title: parsed.data.title,
     body: parsed.data.body,
+    revisionSummary: parsed.data.revisionSummary || undefined,
+    changedBy: founder.id,
   });
 
   if (result.error !== null) {
