@@ -58,8 +58,12 @@ const RULES: Rule[] = [
     categoryLabel: "Unsupported research claim",
     guidance:
       "Attach a credible, approved source, or rewrite as a careful observation rather than presenting it as established research.",
+    // Loose word-distance match rather than a fixed bigram, so phrasing
+    // like "Research on long relationships shows us..." or "Studies of
+    // couples in this stage suggest..." is still caught even with words
+    // in between the subject and the verb.
     pattern:
-      /\b(research shows?|studies (show|have shown|find|found)|psychologists (say|agree|believe)|science (says|shows)|experts (say|agree|believe)|data shows?|statistics show)\b/gi,
+      /\b(research|studies|science|data|statistics|experts|psychologists)\b[^.!?]{0,80}?\b(shows?|show|has shown|have shown|finds?|found|indicates?|suggests?|says?|agree|agrees|believes?)\b/gi,
   },
   // ------------------------------------------------------------
   // 3. Absolute psychological claims

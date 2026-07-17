@@ -12,6 +12,13 @@ describe("runContentChecks", () => {
     expect(flags.some((f) => f.category === "unsupported_research_claim")).toBe(true);
   });
 
+  it("flags unsupported research claims with words between subject and verb", () => {
+    const flags = runContentChecks(
+      "Research on long relationships shows us something important about couples."
+    );
+    expect(flags.some((f) => f.category === "unsupported_research_claim")).toBe(true);
+  });
+
   it("flags absolute psychological claims", () => {
     const flags = runContentChecks("The conversation vanished the day the kids left.");
     expect(flags.some((f) => f.category === "absolute_psychological_claim")).toBe(true);
