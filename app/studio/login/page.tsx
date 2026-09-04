@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const errorMessages: Record<string, string> = {
   "not-authorized":
     "You're signed out, or your account isn't on the founder allowlist yet.",
-  "not-configured": "Supabase is not configured for this environment.",
+  "not-configured": "The Neon database is not configured for this environment.",
 };
 
 export default async function StudioLoginPage({

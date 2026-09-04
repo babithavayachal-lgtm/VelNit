@@ -1,8 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import { newsletterSchema, type NewsletterInput } from "@/lib/validation/schemas";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { ActionResult } from "@/features/beta/actions";
 
 export async function subscribeToNewsletter(input: NewsletterInput): Promise<ActionResult> {
@@ -14,18 +13,19 @@ export async function subscribeToNewsletter(input: NewsletterInput): Promise<Act
     return { success: true };
   }
 
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase is not configured - newsletter signup was not persisted.");
+  if (!isDatabaseConfigured) {
+    console.warn("Neon is not configured - newsletter signup was not persisted.");
     return { success: true };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("newsletter_subscribers").insert({
-    email: parsed.data.email,
-    source: "website",
-  });
-
-  if (error && error.code !== "23505") {
+  try {
+    await db.query(
+      `insert into newsletter_subscribers (email, source)
+       values ($1, 'website')
+       on conflict (email) do nothing`,
+      [parsed.data.email],
+    );
+  } catch (error) {
     console.error("newsletter insert failed:", error);
     return { success: false, error: "Something went wrong. Please try again." };
   }

@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         <Container className="prose prose-neutral mx-auto max-w-3xl prose-headings:font-heading prose-headings:text-foreground prose-p:text-muted-foreground">
           <p>
             This is a placeholder Privacy Policy for the VelNit Life Phase 1
-            marketing site. A complete policy - covering Supabase data
+            marketing site. A complete policy - covering Neon data
             storage, authentication, and third-party processors like Resend
             - will be published ahead of general availability.
           </p>
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
             On this site, we collect the information you voluntarily submit
             through the beta registration, newsletter and contact forms:
             name, email address, and any message content you provide. This
-            data is stored in Supabase (PostgreSQL) with row-level security
+            data is stored in Neon PostgreSQL with application-level access controls
             enabled.
           </p>
           <h2>Contact</h2>

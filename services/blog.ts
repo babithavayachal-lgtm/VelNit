@@ -1,115 +1,115 @@
-import { createPublicClient } from "@/lib/supabase/public";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import type { BlogPostWithRelations } from "@/types/database";
+import "server-only";
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
+import matter from "gray-matter";
+import type { BlogPostWithRelations, Category, Tag } from "@/types/database";
 
-/**
- * Blog data access. Every function degrades to an empty result (never
- * throws) when Supabase isn't configured yet, so the site builds and
- * renders cleanly before real credentials/content exist.
- */
+const BLOG_DIRECTORY = path.join(process.cwd(), "content", "blog");
 
-async function withRelations(
-  rows: Array<
-    Record<string, unknown> & {
-      authors: unknown;
-      categories: unknown;
-      blog_posts_tags: Array<{ tags: unknown }>;
-    }
-  >
-): Promise<BlogPostWithRelations[]> {
-  return rows.map((row) => {
-    const { authors, categories, blog_posts_tags, ...post } = row;
-    return {
-      ...(post as BlogPostWithRelations),
-      author: (authors as BlogPostWithRelations["author"]) ?? null,
-      category: (categories as BlogPostWithRelations["category"]) ?? null,
-      tags: (blog_posts_tags ?? []).map((t) => t.tags) as BlogPostWithRelations["tags"],
-    };
+type BlogFrontmatter = {
+  title: string;
+  excerpt?: string;
+  featuredImage?: string;
+  author?: string;
+  category?: string;
+  tags?: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  publishedAt: string;
+  updatedAt?: string;
+  draft?: boolean;
+};
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function categoryFrom(name?: string): Category | null {
+  if (!name) return null;
+  const slug = slugify(name);
+  return { id: slug, name, slug };
+}
+
+function tagsFrom(names: string[] = []): Tag[] {
+  return names.map((name) => {
+    const slug = slugify(name);
+    return { id: slug, name, slug };
   });
 }
 
-const SELECT = `
-  *,
-  authors ( id, name, avatar_url, bio ),
-  categories ( id, name, slug ),
-  blog_posts_tags ( tags ( id, name, slug ) )
-`;
+async function readPost(filename: string): Promise<BlogPostWithRelations> {
+  const slug = filename.replace(/\.mdx?$/, "");
+  const source = await readFile(path.join(BLOG_DIRECTORY, filename), "utf8");
+  const { data, content } = matter(source);
+  const meta = data as BlogFrontmatter;
+
+  if (!meta.title || !meta.publishedAt) {
+    throw new Error(`Blog post ${filename} is missing title or publishedAt frontmatter.`);
+  }
+
+  const publishedAt = new Date(meta.publishedAt).toISOString();
+  const updatedAt = new Date(meta.updatedAt ?? meta.publishedAt).toISOString();
+
+  return {
+    id: slug,
+    created_at: publishedAt,
+    updated_at: updatedAt,
+    title: meta.title,
+    slug,
+    excerpt: meta.excerpt ?? null,
+    content: content.trim(),
+    featured_image: meta.featuredImage ?? null,
+    author_id: null,
+    category_id: meta.category ? slugify(meta.category) : null,
+    seo_title: meta.seoTitle ?? null,
+    seo_description: meta.seoDescription ?? null,
+    status: meta.draft ? "draft" : "published",
+    published_at: publishedAt,
+    scheduled_at: null,
+    author: meta.author
+      ? { id: slugify(meta.author), name: meta.author, avatar_url: null, bio: null }
+      : null,
+    category: categoryFrom(meta.category),
+    tags: tagsFrom(meta.tags),
+  };
+}
 
 export async function getPublishedPosts(): Promise<BlogPostWithRelations[]> {
-  if (!isSupabaseConfigured) return [];
-
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(SELECT)
-    .eq("status", "published")
-    .lte("published_at", new Date().toISOString())
-    .order("published_at", { ascending: false });
-
-  if (error) {
-    console.error("getPublishedPosts failed:", error.message);
+  let filenames: string[];
+  try {
+    filenames = (await readdir(BLOG_DIRECTORY)).filter((name) => /\.mdx?$/.test(name));
+  } catch (error) {
+    console.error("Could not read Git-backed blog content:", error);
     return [];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return withRelations((data ?? []) as any);
+  const now = Date.now();
+  const posts = await Promise.all(filenames.map(readPost));
+  return posts
+    .filter((post) => post.status === "published" && new Date(post.published_at!).getTime() <= now)
+    .sort((a, b) => new Date(b.published_at!).getTime() - new Date(a.published_at!).getTime());
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPostWithRelations | null> {
-  if (!isSupabaseConfigured) return null;
-
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(SELECT)
-    .eq("slug", slug)
-    .eq("status", "published")
-    .lte("published_at", new Date().toISOString())
-    .maybeSingle();
-
-  if (error || !data) {
-    if (error) console.error("getPostBySlug failed:", error.message);
-    return null;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [withRels] = await withRelations([data as any]);
-  return withRels;
+  return (await getPublishedPosts()).find((post) => post.slug === slug) ?? null;
 }
 
-export async function getRelatedPosts(
-  post: BlogPostWithRelations,
-  limit = 3
-): Promise<BlogPostWithRelations[]> {
-  if (!isSupabaseConfigured || !post.category_id) return [];
-
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(SELECT)
-    .eq("status", "published")
-    .eq("category_id", post.category_id)
-    .neq("id", post.id)
-    .lte("published_at", new Date().toISOString())
-    .order("published_at", { ascending: false })
-    .limit(limit);
-
-  if (error) return [];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return withRelations((data ?? []) as any);
+export async function getRelatedPosts(post: BlogPostWithRelations, limit = 3) {
+  return (await getPublishedPosts())
+    .filter((candidate) => candidate.id !== post.id && candidate.category_id === post.category_id)
+    .slice(0, limit);
 }
 
-export async function getAllCategories() {
-  if (!isSupabaseConfigured) return [];
-  const supabase = createPublicClient();
-  const { data } = await supabase.from("categories").select("*").order("name");
-  return data ?? [];
+export async function getAllCategories(): Promise<Category[]> {
+  const posts = await getPublishedPosts();
+  return Array.from(
+    new Map(posts.flatMap((post) => post.category ? [[post.category.slug, post.category] as const] : [])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function getAllTags() {
-  if (!isSupabaseConfigured) return [];
-  const supabase = createPublicClient();
-  const { data } = await supabase.from("tags").select("*").order("name");
-  return data ?? [];
+export async function getAllTags(): Promise<Tag[]> {
+  const posts = await getPublishedPosts();
+  return Array.from(
+    new Map(posts.flatMap((post) => post.tags.map((tag) => [tag.slug, tag] as const))).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
 }

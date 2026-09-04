@@ -20,7 +20,7 @@ import type { ContentType } from "@/types/database";
 
 // Maps a content type to the (future) distribution channel a
 // publication_jobs stub is created for on approval. Phase B never acts on
-// these rows - see supabase/migrations/0002_content_os.sql.
+// these rows - see database/migrations/0001_neon_foundation.sql.
 const CHANNEL_BY_CONTENT_TYPE: Record<ContentType, string> = {
   article: "website",
   facebook: "facebook",

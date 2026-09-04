@@ -1,10 +1,6 @@
 /**
- * Hand-authored types mirroring the Supabase schema defined in
- * supabase/migrations/0001_init.sql and 0002_content_os.sql. Regenerate
- * with the Supabase CLI (`supabase gen types typescript`) once the project
- * is linked, and this file can be replaced automatically without touching
- * call sites, since consumers import the `Database` type, not individual
- * table shapes.
+ * Hand-authored application row types mirroring the Neon schema in
+ * database/migrations/0001_neon_foundation.sql.
  */
 export type Json =
   | string

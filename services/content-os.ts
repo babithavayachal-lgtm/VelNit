@@ -1,659 +1,201 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import type { PoolClient, QueryResultRow } from "pg";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import type {
-  Database,
-  ContentBrief,
-  ContentIdea,
-  ContentItem,
-  ContentItemRevision,
-  ContentReview,
-  ContentStatus,
-  ContentType,
-  KnowledgeReference,
-  PublicationJob,
-  ReviewDecision,
+  ContentBrief, ContentIdea, ContentItem, ContentItemRevision, ContentReview,
+  ContentStatus, ContentType, KnowledgeReference, PublicationJob, ReviewDecision,
 } from "@/types/database";
 
-/**
- * Data access for the Content Operating System (Phase B). Every table here
- * is founder-only and RLS-gated (see supabase/migrations/0002_content_os.sql)
- * - these functions always run with the cookie-bound server client so
- * auth.uid() resolves correctly inside Postgres policies. Never call this
- * module from a Client Component.
- *
- * Like services/blog.ts, every read degrades to an empty result rather than
- * throwing when Supabase isn't configured; writes surface a clear error
- * instead, since a founder taking an action deserves to know it didn't save.
- */
-
 export type ServiceResult<T> = { data: T; error: null } | { data: null; error: string };
+const ok = <T>(data: T): ServiceResult<T> => ({ data, error: null });
+const fail = <T>(error: string): ServiceResult<T> => ({ data: null, error });
 
-function ok<T>(data: T): ServiceResult<T> {
-  return { data, error: null };
+async function rows<T extends QueryResultRow>(sql: string, values: unknown[] = []): Promise<T[]> {
+  return (await db.query<T>(sql, values)).rows;
 }
 
-function fail<T>(error: string): ServiceResult<T> {
-  return { data: null, error };
+async function safeList<T extends QueryResultRow>(label: string, sql: string, values: unknown[] = []): Promise<T[]> {
+  if (!isDatabaseConfigured) return [];
+  try { return await rows<T>(sql, values); }
+  catch (error) { console.error(`${label} failed:`, error); return []; }
 }
 
-// ------------------------------------------------------------
-// Content ideas
-// ------------------------------------------------------------
+async function safeOne<T extends QueryResultRow>(label: string, sql: string, values: unknown[] = []): Promise<T | null> {
+  return (await safeList<T>(label, sql, values))[0] ?? null;
+}
 
 export async function listContentIdeas(): Promise<ContentIdea[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_ideas")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("listContentIdeas failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("listContentIdeas", "select * from content_ideas order by created_at desc");
 }
-
 export async function getContentIdea(id: string): Promise<ContentIdea | null> {
-  if (!isSupabaseConfigured) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_ideas")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("getContentIdea failed:", error.message);
-    return null;
-  }
-  return data;
+  return safeOne("getContentIdea", "select * from content_ideas where id = $1", [id]);
 }
-
-export async function createContentIdea(input: {
-  topic: string;
-  audience: string;
-  notes?: string | null;
-  createdBy: string;
-}): Promise<ServiceResult<ContentIdea>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_ideas")
-    .insert({
-      topic: input.topic,
-      audience: input.audience,
-      notes: input.notes || null,
-      created_by: input.createdBy,
-      status: "idea",
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("createContentIdea failed:", error?.message);
-    return fail("Could not save the idea. Please try again.");
-  }
-  return ok(data);
+export async function createContentIdea(input: { topic: string; audience: string; notes?: string | null; createdBy: string }): Promise<ServiceResult<ContentIdea>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  try {
+    const [idea] = await rows<ContentIdea>(
+      "insert into content_ideas (topic, audience, notes, created_by, status) values ($1,$2,$3,$4,'idea') returning *",
+      [input.topic, input.audience, input.notes || null, input.createdBy],
+    );
+    return idea ? ok(idea) : fail("Could not save the idea. Please try again.");
+  } catch (error) { console.error("createContentIdea failed:", error); return fail("Could not save the idea. Please try again."); }
 }
-
-// ------------------------------------------------------------
-// Content briefs
-// ------------------------------------------------------------
 
 export async function listContentBriefs(): Promise<ContentBrief[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_briefs")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("listContentBriefs failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("listContentBriefs", "select * from content_briefs order by created_at desc");
 }
-
 export async function getContentBrief(id: string): Promise<ContentBrief | null> {
-  if (!isSupabaseConfigured) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_briefs")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("getContentBrief failed:", error.message);
-    return null;
-  }
-  return data;
+  return safeOne("getContentBrief", "select * from content_briefs where id = $1", [id]);
 }
-
 export async function getContentBriefsForIdea(ideaId: string): Promise<ContentBrief[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_briefs")
-    .select("*")
-    .eq("idea_id", ideaId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("getContentBriefsForIdea failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("getContentBriefsForIdea", "select * from content_briefs where idea_id = $1 order by created_at desc", [ideaId]);
 }
-
 export async function createContentBrief(input: {
-  ideaId: string;
-  topic: string;
-  audience: string;
-  primaryEmotion: string;
-  desiredOutcome: string;
-  talkStage: string;
-  vrifPillars: string[];
-  practicalAction: string;
-  callToAction: string;
-  knowledgeReferenceIds: string[];
-  prohibitedClaims?: string | null;
-  createdBy: string;
+  ideaId: string; topic: string; audience: string; primaryEmotion: string; desiredOutcome: string;
+  talkStage: string; vrifPillars: string[]; practicalAction: string; callToAction: string;
+  knowledgeReferenceIds: string[]; prohibitedClaims?: string | null; createdBy: string;
 }): Promise<ServiceResult<ContentBrief>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("content_briefs")
-    .insert({
-      idea_id: input.ideaId,
-      topic: input.topic,
-      audience: input.audience,
-      primary_emotion: input.primaryEmotion,
-      desired_outcome: input.desiredOutcome,
-      talk_stage: input.talkStage,
-      vrif_pillars: input.vrifPillars,
-      practical_action: input.practicalAction,
-      call_to_action: input.callToAction,
-      knowledge_reference_ids: input.knowledgeReferenceIds,
-      prohibited_claims: input.prohibitedClaims || null,
-      created_by: input.createdBy,
-      status: "brief_ready",
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("createContentBrief failed:", error?.message);
-    return fail("Could not save the brief. Please try again.");
-  }
-
-  // A brief moving to brief_ready implies its parent idea has progressed too.
-  await supabase.from("content_ideas").update({ status: "brief_ready" }).eq("id", input.ideaId);
-
-  return ok(data);
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    const result = await client.query<ContentBrief>(
+      `insert into content_briefs
+       (idea_id,topic,audience,primary_emotion,desired_outcome,talk_stage,vrif_pillars,practical_action,call_to_action,knowledge_reference_ids,prohibited_claims,created_by,status)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'brief_ready') returning *`,
+      [input.ideaId,input.topic,input.audience,input.primaryEmotion,input.desiredOutcome,input.talkStage,input.vrifPillars,input.practicalAction,input.callToAction,input.knowledgeReferenceIds,input.prohibitedClaims || null,input.createdBy],
+    );
+    await client.query("update content_ideas set status = 'brief_ready' where id = $1", [input.ideaId]);
+    await client.query("commit");
+    return result.rows[0] ? ok(result.rows[0]) : fail("Could not save the brief. Please try again.");
+  } catch (error) {
+    await client.query("rollback"); console.error("createContentBrief failed:", error); return fail("Could not save the brief. Please try again.");
+  } finally { client.release(); }
 }
-
-export async function setContentBriefStatus(
-  id: string,
-  status: ContentStatus
-): Promise<ServiceResult<true>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-  const { error } = await supabase.from("content_briefs").update({ status }).eq("id", id);
-
-  if (error) {
-    console.error("setContentBriefStatus failed:", error.message);
-    return fail("Could not update the brief status.");
-  }
-  return ok(true);
+export async function setContentBriefStatus(id: string, status: ContentStatus): Promise<ServiceResult<true>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  try { await db.query("update content_briefs set status = $1 where id = $2", [status, id]); return ok(true); }
+  catch (error) { console.error("setContentBriefStatus failed:", error); return fail("Could not update the brief status."); }
 }
-
-// ------------------------------------------------------------
-// Content items (the four generated draft formats)
-// ------------------------------------------------------------
 
 export async function getContentItemsForBrief(briefId: string): Promise<ContentItem[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_items")
-    .select("*")
-    .eq("brief_id", briefId)
-    .order("content_type", { ascending: true });
-
-  if (error) {
-    console.error("getContentItemsForBrief failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("getContentItemsForBrief", "select * from content_items where brief_id = $1 order by content_type", [briefId]);
 }
-
 export async function getContentItem(id: string): Promise<ContentItem | null> {
-  if (!isSupabaseConfigured) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_items")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("getContentItem failed:", error.message);
-    return null;
-  }
-  return data;
+  return safeOne("getContentItem", "select * from content_items where id = $1", [id]);
 }
-
-/**
- * Lists every item currently sitting in the founder's review queue -
- * anything drafted but not yet approved or sent back for revision.
- */
 export async function listItemsPendingReview(): Promise<ContentItem[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_items")
-    .select("*")
-    .in("status", ["draft", "needs_revision"])
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error("listItemsPendingReview failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("listItemsPendingReview", "select * from content_items where status = any($1::content_status[]) order by created_at", [["draft", "needs_revision"]]);
 }
 
-// ------------------------------------------------------------
-// Version history - snapshot a content_items row before it gets
-// overwritten, so "Version 1" stays inspectable even after "Version 2"
-// replaces it as the current draft.
-// ------------------------------------------------------------
-
-async function archiveContentItemVersion(
-  current: ContentItem,
-  revisionSummary: string,
-  changedBy: string | null
-): Promise<void> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("content_item_revisions").insert({
-    content_item_id: current.id,
-    version: current.version,
-    title: current.title,
-    body: current.body,
-    status: current.status,
-    talk_stage: current.talk_stage,
-    vrif_pillars: current.vrif_pillars,
-    knowledge_reference_ids: current.knowledge_reference_ids,
-    prompt_version: current.prompt_version,
-    review_score: current.review_score,
-    review_notes: current.review_notes,
-    generation_error: current.generation_error,
-    revision_summary: revisionSummary,
-    changed_by: changedBy,
-  });
-
-  if (error) {
-    // Archiving is best-effort - if it fails we still want the actual
-    // content update to proceed, but we log loudly since silently losing
-    // version history defeats the entire point of this table.
-    console.error("archiveContentItemVersion failed:", error.message);
-  }
-}
-
-export async function listRevisionsForItem(
-  contentItemId: string
-): Promise<ContentItemRevision[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_item_revisions")
-    .select("*")
-    .eq("content_item_id", contentItemId)
-    .order("version", { ascending: false });
-
-  if (error) {
-    console.error("listRevisionsForItem failed:", error.message);
-    return [];
-  }
-  return data ?? [];
-}
-
-/**
- * Inserts a freshly generated draft, or - if a draft of this content type
- * already exists for the brief (e.g. a regeneration after "Request
- * revision") - archives the existing row into content_item_revisions and
- * then saves the new content as the next version over the existing row,
- * rather than creating a duplicate. content_items has a unique
- * (brief_id, content_type) index specifically so this upsert is safe.
- */
-export async function saveGeneratedContentItem(input: {
-  briefId: string;
-  contentType: ContentType;
-  title: string;
-  body: string;
-  talkStage: string | null;
-  vrifPillars: string[];
-  knowledgeReferenceIds: string[];
-  promptVersion: string;
-  createdBy: string;
-}): Promise<ServiceResult<ContentItem>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const existing = await supabase
-    .from("content_items")
-    .select("*")
-    .eq("brief_id", input.briefId)
-    .eq("content_type", input.contentType)
-    .maybeSingle();
-
-  if (existing.data) {
-    await archiveContentItemVersion(
-      existing.data,
-      `Regenerated by AI (prompt ${input.promptVersion}).`,
-      input.createdBy
-    );
-
-    const { data, error } = await supabase
-      .from("content_items")
-      .update({
-        title: input.title,
-        body: input.body,
-        version: existing.data.version + 1,
-        status: "draft",
-        talk_stage: input.talkStage,
-        vrif_pillars: input.vrifPillars,
-        knowledge_reference_ids: input.knowledgeReferenceIds,
-        prompt_version: input.promptVersion,
-        generation_error: null,
-        approved_at: null,
-        published_at: null,
-      })
-      .eq("id", existing.data.id)
-      .select("*")
-      .single();
-
-    if (error || !data) {
-      console.error("saveGeneratedContentItem (update) failed:", error?.message);
-      return fail("Could not save the regenerated draft.");
-    }
-    return ok(data);
-  }
-
-  const { data, error } = await supabase
-    .from("content_items")
-    .insert({
-      brief_id: input.briefId,
-      content_type: input.contentType,
-      title: input.title,
-      body: input.body,
-      status: "draft",
-      talk_stage: input.talkStage,
-      vrif_pillars: input.vrifPillars,
-      knowledge_reference_ids: input.knowledgeReferenceIds,
-      prompt_version: input.promptVersion,
-      created_by: input.createdBy,
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("saveGeneratedContentItem (insert) failed:", error?.message);
-    return fail("Could not save the generated draft.");
-  }
-  return ok(data);
-}
-
-/**
- * Records a generation failure directly on the item's row (or a placeholder
- * row if generation never produced one) so founders can see, per format,
- * exactly what went wrong rather than a silent gap in the review screen.
- */
-export async function recordGenerationFailure(input: {
-  briefId: string;
-  contentType: ContentType;
-  createdBy: string;
-  errorMessage: string;
-  promptVersion: string;
-}): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const supabase = await createClient();
-
-  const existing = await supabase
-    .from("content_items")
-    .select("id")
-    .eq("brief_id", input.briefId)
-    .eq("content_type", input.contentType)
-    .maybeSingle();
-
-  if (existing.data) {
-    await supabase
-      .from("content_items")
-      .update({ generation_error: input.errorMessage })
-      .eq("id", existing.data.id);
-    return;
-  }
-
-  await supabase.from("content_items").insert({
-    brief_id: input.briefId,
-    content_type: input.contentType,
-    title: `(generation failed - ${input.contentType})`,
-    body: "",
-    status: "draft",
-    prompt_version: input.promptVersion,
-    generation_error: input.errorMessage,
-    created_by: input.createdBy,
-  });
-}
-
-export async function updateContentItemBody(input: {
-  id: string;
-  title: string;
-  body: string;
-  revisionSummary?: string;
-  changedBy?: string | null;
-}): Promise<ServiceResult<ContentItem>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const current = await supabase
-    .from("content_items")
-    .select("*")
-    .eq("id", input.id)
-    .maybeSingle();
-
-  if (!current.data) {
-    return fail("Could not find the draft to update.");
-  }
-
-  await archiveContentItemVersion(
-    current.data,
-    input.revisionSummary || "Manual edit by founder.",
-    input.changedBy ?? null
+async function archiveContentItemVersion(client: PoolClient, current: ContentItem, summary: string, changedBy: string | null): Promise<void> {
+  await client.query(
+    `insert into content_item_revisions
+     (content_item_id,version,title,body,status,talk_stage,vrif_pillars,knowledge_reference_ids,prompt_version,review_score,review_notes,generation_error,revision_summary,changed_by)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    [current.id,current.version,current.title,current.body,current.status,current.talk_stage,current.vrif_pillars,current.knowledge_reference_ids,current.prompt_version,current.review_score,current.review_notes,current.generation_error,summary,changedBy],
   );
-
-  const { data, error } = await supabase
-    .from("content_items")
-    .update({
-      title: input.title,
-      body: input.body,
-      version: current.data.version + 1,
-      status: "draft",
-    })
-    .eq("id", input.id)
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("updateContentItemBody failed:", error?.message);
-    return fail("Could not save your edit.");
-  }
-  return ok(data);
+}
+export async function listRevisionsForItem(contentItemId: string): Promise<ContentItemRevision[]> {
+  return safeList("listRevisionsForItem", "select * from content_item_revisions where content_item_id = $1 order by version desc", [contentItemId]);
 }
 
-export async function setContentItemStatus(
-  id: string,
-  status: ContentStatus,
-  extra: Partial<{ reviewScore: number | null; reviewNotes: string | null }> = {}
-): Promise<ServiceResult<ContentItem>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const patch: Database["public"]["Tables"]["content_items"]["Update"] = { status };
-  if ("reviewScore" in extra) patch.review_score = extra.reviewScore;
-  if ("reviewNotes" in extra) patch.review_notes = extra.reviewNotes;
-  if (status === "approved") patch.approved_at = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from("content_items")
-    .update(patch)
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("setContentItemStatus failed:", error?.message);
-    return fail("Could not update the draft status.");
-  }
-  return ok(data);
+export async function saveGeneratedContentItem(input: {
+  briefId: string; contentType: ContentType; title: string; body: string; talkStage: string | null;
+  vrifPillars: string[]; knowledgeReferenceIds: string[]; promptVersion: string; createdBy: string;
+}): Promise<ServiceResult<ContentItem>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    const existing = (await client.query<ContentItem>("select * from content_items where brief_id=$1 and content_type=$2 for update", [input.briefId,input.contentType])).rows[0];
+    let item: ContentItem | undefined;
+    if (existing) {
+      await archiveContentItemVersion(client, existing, `Regenerated by AI (prompt ${input.promptVersion}).`, input.createdBy);
+      item = (await client.query<ContentItem>(
+        `update content_items set title=$1,body=$2,version=$3,status='draft',talk_stage=$4,vrif_pillars=$5,knowledge_reference_ids=$6,prompt_version=$7,generation_error=null,approved_at=null,published_at=null where id=$8 returning *`,
+        [input.title,input.body,existing.version+1,input.talkStage,input.vrifPillars,input.knowledgeReferenceIds,input.promptVersion,existing.id],
+      )).rows[0];
+    } else {
+      item = (await client.query<ContentItem>(
+        `insert into content_items (brief_id,content_type,title,body,status,talk_stage,vrif_pillars,knowledge_reference_ids,prompt_version,created_by)
+         values ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9) returning *`,
+        [input.briefId,input.contentType,input.title,input.body,input.talkStage,input.vrifPillars,input.knowledgeReferenceIds,input.promptVersion,input.createdBy],
+      )).rows[0];
+    }
+    await client.query("commit");
+    return item ? ok(item) : fail("Could not save the generated draft.");
+  } catch (error) { await client.query("rollback"); console.error("saveGeneratedContentItem failed:", error); return fail("Could not save the generated draft."); }
+  finally { client.release(); }
 }
 
-// ------------------------------------------------------------
-// Content reviews (append-only decision log)
-// ------------------------------------------------------------
-
-export async function createContentReview(input: {
-  contentItemId: string;
-  reviewerId: string;
-  decision: ReviewDecision;
-  score?: number | null;
-  notes?: string | null;
-}): Promise<ServiceResult<ContentReview>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("content_reviews")
-    .insert({
-      content_item_id: input.contentItemId,
-      reviewer_id: input.reviewerId,
-      decision: input.decision,
-      score: input.score ?? null,
-      notes: input.notes || null,
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("createContentReview failed:", error?.message);
-    return fail("Could not save the review.");
-  }
-  return ok(data);
+export async function recordGenerationFailure(input: { briefId: string; contentType: ContentType; createdBy: string; errorMessage: string; promptVersion: string }): Promise<void> {
+  if (!isDatabaseConfigured) return;
+  try {
+    await db.query(
+      `insert into content_items (brief_id,content_type,title,body,status,prompt_version,generation_error,created_by)
+       values ($1,$2,$3,'','draft',$4,$5,$6)
+       on conflict (brief_id,content_type) do update set generation_error=excluded.generation_error`,
+      [input.briefId,input.contentType,`(generation failed - ${input.contentType})`,input.promptVersion,input.errorMessage,input.createdBy],
+    );
+  } catch (error) { console.error("recordGenerationFailure failed:", error); }
 }
 
+export async function updateContentItemBody(input: { id: string; title: string; body: string; revisionSummary?: string; changedBy?: string | null }): Promise<ServiceResult<ContentItem>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    const current = (await client.query<ContentItem>("select * from content_items where id=$1 for update", [input.id])).rows[0];
+    if (!current) { await client.query("rollback"); return fail("Could not find the draft to update."); }
+    await archiveContentItemVersion(client,current,input.revisionSummary || "Manual edit by founder.",input.changedBy ?? null);
+    const item = (await client.query<ContentItem>("update content_items set title=$1,body=$2,version=$3,status='draft' where id=$4 returning *", [input.title,input.body,current.version+1,input.id])).rows[0];
+    await client.query("commit");
+    return item ? ok(item) : fail("Could not save your edit.");
+  } catch (error) { await client.query("rollback"); console.error("updateContentItemBody failed:", error); return fail("Could not save your edit."); }
+  finally { client.release(); }
+}
+
+export async function setContentItemStatus(id: string, status: ContentStatus, extra: Partial<{ reviewScore: number | null; reviewNotes: string | null }> = {}): Promise<ServiceResult<ContentItem>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  try {
+    const [item] = await rows<ContentItem>(
+      `update content_items set status=$1, review_score=case when $2 then $3 else review_score end,
+       review_notes=case when $4 then $5 else review_notes end, approved_at=case when $1='approved' then now() else approved_at end
+       where id=$6 returning *`,
+      [status,"reviewScore" in extra,extra.reviewScore ?? null,"reviewNotes" in extra,extra.reviewNotes ?? null,id],
+    );
+    return item ? ok(item) : fail("Could not update the draft status.");
+  } catch (error) { console.error("setContentItemStatus failed:", error); return fail("Could not update the draft status."); }
+}
+
+export async function createContentReview(input: { contentItemId: string; reviewerId: string; decision: ReviewDecision; score?: number | null; notes?: string | null }): Promise<ServiceResult<ContentReview>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  try {
+    const [review] = await rows<ContentReview>("insert into content_reviews (content_item_id,reviewer_id,decision,score,notes) values ($1,$2,$3,$4,$5) returning *", [input.contentItemId,input.reviewerId,input.decision,input.score ?? null,input.notes || null]);
+    return review ? ok(review) : fail("Could not save the review.");
+  } catch (error) { console.error("createContentReview failed:", error); return fail("Could not save the review."); }
+}
 export async function listReviewsForItem(contentItemId: string): Promise<ContentReview[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("content_reviews")
-    .select("*")
-    .eq("content_item_id", contentItemId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("listReviewsForItem failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("listReviewsForItem", "select * from content_reviews where content_item_id=$1 order by created_at desc", [contentItemId]);
 }
-
-// ------------------------------------------------------------
-// Knowledge references (VRIF / TALK / Writing DNA / Knowledge Graph)
-// ------------------------------------------------------------
-
 export async function listKnowledgeReferences(): Promise<KnowledgeReference[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("knowledge_references")
-    .select("*")
-    .order("source_document", { ascending: true });
-
-  if (error) {
-    console.error("listKnowledgeReferences failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+  return safeList("listKnowledgeReferences", "select * from knowledge_references order by source_document");
 }
-
-export async function getKnowledgeReferencesByIds(
-  ids: string[]
-): Promise<KnowledgeReference[]> {
-  if (!isSupabaseConfigured || ids.length === 0) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("knowledge_references")
-    .select("*")
-    .in("id", ids);
-
-  if (error) {
-    console.error("getKnowledgeReferencesByIds failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+export async function getKnowledgeReferencesByIds(ids: string[]): Promise<KnowledgeReference[]> {
+  if (!ids.length) return [];
+  return safeList("getKnowledgeReferencesByIds", "select * from knowledge_references where id = any($1::uuid[])", [ids]);
 }
-
-// ------------------------------------------------------------
-// Publication jobs - stub only in Phase B. Creating a row here never
-// triggers any real publishing; nothing in this codebase advances a job
-// past 'approved'. See supabase/migrations/0002_content_os.sql.
-// ------------------------------------------------------------
-
-export async function createPublicationJobStub(input: {
-  contentItemId: string;
-  channel: string;
-}): Promise<ServiceResult<PublicationJob>> {
-  if (!isSupabaseConfigured) return fail("Supabase is not configured.");
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("publication_jobs")
-    .insert({
-      content_item_id: input.contentItemId,
-      channel: input.channel,
-      status: "approved",
-      notes: "Created automatically when the draft was approved. Phase B does not publish - no channel integration exists yet.",
-    })
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    console.error("createPublicationJobStub failed:", error?.message);
-    return fail("Could not create the publication job stub.");
-  }
-  return ok(data);
+export async function createPublicationJobStub(input: { contentItemId: string; channel: string }): Promise<ServiceResult<PublicationJob>> {
+  if (!isDatabaseConfigured) return fail("Neon is not configured.");
+  try {
+    const [job] = await rows<PublicationJob>(
+      "insert into publication_jobs (content_item_id,channel,status,notes) values ($1,$2,'approved',$3) returning *",
+      [input.contentItemId,input.channel,"Created automatically when the draft was approved. Phase B does not publish - no channel integration exists yet."],
+    );
+    return job ? ok(job) : fail("Could not create the publication job stub.");
+  } catch (error) { console.error("createPublicationJobStub failed:", error); return fail("Could not create the publication job stub."); }
 }
-
-export async function listPublicationJobsForItem(
-  contentItemId: string
-): Promise<PublicationJob[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("publication_jobs")
-    .select("*")
-    .eq("content_item_id", contentItemId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("listPublicationJobsForItem failed:", error.message);
-    return [];
-  }
-  return data ?? [];
+export async function listPublicationJobsForItem(contentItemId: string): Promise<PublicationJob[]> {
+  return safeList("listPublicationJobsForItem", "select * from publication_jobs where content_item_id=$1 order by created_at desc", [contentItemId]);
 }

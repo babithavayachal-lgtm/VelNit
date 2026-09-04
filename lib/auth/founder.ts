@@ -1,33 +1,34 @@
 import "server-only";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { auth } from "@/lib/auth";
+import { isDatabaseConfigured } from "@/lib/db";
 import type { Founder } from "@/types/database";
 
 /**
  * Returns the signed-in founder's row, or null if there is no session, or
- * the signed-in user exists in Supabase Auth but has not been added to the
- * `founders` allowlist table. A real Supabase Auth account alone is never
+ * the signed-in user exists in Better Auth but is not included in the
+ * `FOUNDER_EMAILS` allowlist. A valid account alone is never
  * enough to reach the Content OS workspace - see docs/SUPABASE_SETUP.md
  * for how to provision a founder.
  */
 export async function getFounder(): Promise<Founder | null> {
-  if (!isSupabaseConfigured) return null;
+  if (!isDatabaseConfigured) return null;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user.email) return null;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const allowed = (process.env.FOUNDER_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowed.includes(session.user.email.toLowerCase())) return null;
 
-  if (!user) return null;
-
-  const { data: founder } = await supabase
-    .from("founders")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  return founder;
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    full_name: session.user.name || null,
+    created_at: session.user.createdAt.toISOString(),
+  };
 }
 
 /**
@@ -36,7 +37,7 @@ export async function getFounder(): Promise<Founder | null> {
  * signed-out or non-founder visitor always lands somewhere useful.
  */
 export async function requireFounder(): Promise<Founder> {
-  if (!isSupabaseConfigured) {
+  if (!isDatabaseConfigured) {
     redirect("/studio/login?error=not-configured");
   }
 

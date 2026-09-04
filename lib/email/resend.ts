@@ -15,7 +15,7 @@ const FROM = process.env.RESEND_FROM_EMAIL ?? "VelNit Life <hello@velnit.life>";
 /**
  * Best-effort transactional email. Never throws - a missing/invalid Resend
  * config should never block a form submission from succeeding, since the
- * Supabase row is the source of truth.
+ * database row is the source of truth.
  */
 export async function sendTransactionalEmail(params: {
   to: string;

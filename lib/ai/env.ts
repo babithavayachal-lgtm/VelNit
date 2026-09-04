@@ -1,6 +1,6 @@
 /**
  * AI provider configuration. Mirrors the graceful-degradation pattern used
- * by lib/supabase/env.ts and lib/email/resend.ts: the app builds and runs
+ * by lib/db/index.ts and lib/email/resend.ts: the app builds and runs
  * fine with none of this set, and generation calls fail loudly (logged +
  * surfaced to the founder) rather than the app crashing at startup.
  */

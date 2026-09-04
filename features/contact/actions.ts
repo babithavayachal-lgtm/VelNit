@@ -1,9 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/resend";
 import { contactSchema, type ContactInput } from "@/lib/validation/schemas";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { siteConfig } from "@/lib/constants/site";
 import type { ActionResult } from "@/features/beta/actions";
 
@@ -16,20 +15,18 @@ export async function submitContactMessage(input: ContactInput): Promise<ActionR
     return { success: true };
   }
 
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase is not configured - contact message was not persisted.");
+  if (!isDatabaseConfigured) {
+    console.warn("Neon is not configured - contact message was not persisted.");
     return { success: true };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("contact_messages").insert({
-    name: parsed.data.name,
-    email: parsed.data.email,
-    subject: parsed.data.subject || null,
-    message: parsed.data.message,
-  });
-
-  if (error) {
+  try {
+    await db.query(
+      `insert into contact_messages (name, email, subject, message)
+       values ($1, $2, $3, $4)`,
+      [parsed.data.name, parsed.data.email, parsed.data.subject || null, parsed.data.message],
+    );
+  } catch (error) {
     console.error("contact message insert failed:", error);
     return { success: false, error: "Something went wrong. Please try again." };
   }

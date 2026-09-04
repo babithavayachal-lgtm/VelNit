@@ -1,9 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/resend";
 import { betaSignupSchema, type BetaSignupInput } from "@/lib/validation/schemas";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -17,22 +16,19 @@ export async function submitBetaSignup(input: BetaSignupInput): Promise<ActionRe
     return { success: true };
   }
 
-  if (!isSupabaseConfigured) {
-    console.warn("Supabase is not configured - beta signup was not persisted.");
+  if (!isDatabaseConfigured) {
+    console.warn("Neon is not configured - beta signup was not persisted.");
     return { success: true };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("beta_signups").insert({
-    full_name: parsed.data.fullName,
-    email: parsed.data.email,
-    role: parsed.data.role,
-    reason: parsed.data.reason || null,
-    source: "website",
-  });
-
-  if (error) {
-    if (error.code === "23505") {
+  try {
+    await db.query(
+      `insert into beta_signups (full_name, email, role, reason, source)
+       values ($1, $2, $3, $4, 'website')`,
+      [parsed.data.fullName, parsed.data.email, parsed.data.role, parsed.data.reason || null],
+    );
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
       return { success: true }; // already registered - treat as success
     }
     console.error("beta signup insert failed:", error);

@@ -7,9 +7,6 @@ import { BlogSearch } from "@/features/blog/blog-search";
 import { BlogPagination } from "@/features/blog/pagination";
 import { Badge } from "@/components/ui/badge";
 import { getAllCategories, getAllTags, getPublishedPosts } from "@/services/blog";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-
-export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -87,14 +84,7 @@ export default async function BlogIndexPage({
             </div>
           )}
 
-          {!isSupabaseConfigured && (
-            <p className="mt-14 text-center text-muted-foreground">
-              Connect Supabase and run the seed script to populate the blog
-              with content. See docs/SUPABASE_SETUP.md.
-            </p>
-          )}
-
-          {isSupabaseConfigured && paginated.length === 0 && (
+          {paginated.length === 0 && (
             <p className="mt-14 text-center text-muted-foreground">
               No articles match your search yet. Try a different term or{" "}
               <Link href="/blog" className="underline">

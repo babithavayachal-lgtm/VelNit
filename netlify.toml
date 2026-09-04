@@ -17,9 +17,12 @@
 # Required environment variables (set these in the Netlify UI under
 # Site configuration > Environment variables - see docs/ENVIRONMENT_VARIABLES.md):
 #   NEXT_PUBLIC_SITE_URL
-#   NEXT_PUBLIC_SUPABASE_URL
-#   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-#   SUPABASE_SECRET_KEY (optional, server-only)
+#   DATABASE_URL
+#   BETTER_AUTH_SECRET
+#   BETTER_AUTH_URL
+#   GITHUB_CLIENT_ID
+#   GITHUB_CLIENT_SECRET
+#   FOUNDER_EMAILS
 #   RESEND_API_KEY (optional)
 #   RESEND_FROM_EMAIL (optional)
 

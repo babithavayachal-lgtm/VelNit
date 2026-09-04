@@ -33,7 +33,7 @@ const faqItems = [
   {
     question: "How is my data handled?",
     answer:
-      "VelNit Life is built on Supabase with row-level security, meaning your data is scoped to you by default. We'll publish a full privacy policy ahead of general availability.",
+      "VelNit Life uses Neon PostgreSQL with server-side access controls. We'll publish a full privacy policy ahead of general availability.",
   },
 ];
 

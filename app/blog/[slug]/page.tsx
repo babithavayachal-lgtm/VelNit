@@ -13,8 +13,6 @@ import { formatDate, readingTime } from "@/lib/utils";
 import { getPostBySlug, getPublishedPosts, getRelatedPosts } from "@/services/blog";
 import { siteConfig } from "@/lib/constants/site";
 
-export const revalidate = 300;
-
 export async function generateStaticParams() {
   const posts = await getPublishedPosts();
   return posts.map((post) => ({ slug: post.slug }));
